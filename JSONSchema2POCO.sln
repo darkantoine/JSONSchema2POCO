@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.29025.244
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "JSONSchema", "JSONSchema\JSONSchema.csproj", "{5882BE30-4CE1-4273-8052-F6747926E231}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{5882BE30-4CE1-4273-8052-F6747926E231}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5882BE30-4CE1-4273-8052-F6747926E231}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5882BE30-4CE1-4273-8052-F6747926E231}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5882BE30-4CE1-4273-8052-F6747926E231}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {6B7372F7-67BF-4230-B327-EF1158B2457C}
+	EndGlobalSection
+EndGlobal
