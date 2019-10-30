@@ -2,12 +2,12 @@
 
 namespace JSONSchema2POCO
 {
-    public class OneOf<T1, T2>
+    public class AnyOf<T1, T2>
     {
        
         private readonly object value;
 
-        public OneOf(object value)
+        public AnyOf(object value)
         {
             if (value is T1 || value is T2)
             {
