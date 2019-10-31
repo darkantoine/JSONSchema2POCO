@@ -10,6 +10,16 @@ namespace JSONSchema2POCO
     {
         private static readonly Dictionary<string, List<JsonValueKind>> expectedJsonValueKinds = new Dictionary<string, List<JsonValueKind>>
         {
+            {"default", new List<JsonValueKind> {
+                JsonValueKind.Object ,
+                JsonValueKind.Number,
+                JsonValueKind.Undefined,
+                JsonValueKind.Array,
+                JsonValueKind.False,
+                JsonValueKind.Null,
+                JsonValueKind.String,
+                JsonValueKind.True} },
+            {"$ref", new List<JsonValueKind> {JsonValueKind.String } },
             {"id", new List<JsonValueKind> {JsonValueKind.String } },
             {"$schema", new List<JsonValueKind> {JsonValueKind.String } },
             {"title", new List<JsonValueKind> {JsonValueKind.String } },
@@ -48,6 +58,8 @@ namespace JSONSchema2POCO
         private static readonly Dictionary<string, Action<JSONSchema, JsonElement>> settersDictionary = new Dictionary<string, Action<JSONSchema, JsonElement>>
         {
             {"id", (x,y) => {x.Id = y.GetString(); } },
+            {"$ref", (x,y) => { } },
+            {"default", (x,y) => { } },
             {"$schema", (x,y) => {x.Schema = y.GetString(); } },
             {"title", (x,y) => {x.Title = y.GetString(); } },
             {"description", (x,y) => {x.Description = y.GetString(); } },
@@ -293,12 +305,17 @@ namespace JSONSchema2POCO
 
     public class StringArray : UniqueNonEmptyList<string>
     {
-        public StringArray(JsonElement jsonElement)
+        public StringArray(JsonElement jsonElement) : base(transformJsonArrayToList(jsonElement)) { }
+  
+
+        private static List<string> transformJsonArrayToList(JsonElement jsonElement)
         {
+            List<string> list = new List<string>();
             foreach (JsonElement str in jsonElement.EnumerateArray())
             {
-                this.Add(str.GetString());
+                list.Add(str.GetString());
             }
+            return list;
         }
     }
 

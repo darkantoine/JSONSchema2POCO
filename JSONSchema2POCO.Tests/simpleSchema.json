@@ -1,0 +1,19 @@
+﻿{
+	"type": "object",
+	"title": "simpleSchema",
+	"additionalProperties": {
+		"type": "string"
+	},
+	"required": ["id"],
+	"properties":{
+		"id":{
+			"type": "integer"
+		},
+		"field1":{
+			"type": "array",
+			"items":{
+				"type":"string"
+			}
+		}
+	}
+}
