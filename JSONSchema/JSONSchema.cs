@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Collections;
 using System.Text.Json;
 using static System.Text.Json.JsonElement;
+using System.Text;
+using System.Reflection;
 
 namespace JSONSchema2POCO
 {
@@ -58,8 +60,8 @@ namespace JSONSchema2POCO
         private static readonly Dictionary<string, Action<JSONSchema, JsonElement>> settersDictionary = new Dictionary<string, Action<JSONSchema, JsonElement>>
         {
             {"id", (x,y) => {x.Id = y.GetString(); } },
-            {"$ref", (x,y) => { } },
-            {"default", (x,y) => { } },
+            {"$ref", (x,y) => {x.Ref = y.GetString(); } },
+            {"default", (x,y) => { x.Default = y; } },
             {"$schema", (x,y) => {x.Schema = y.GetString(); } },
             {"title", (x,y) => {x.Title = y.GetString(); } },
             {"description", (x,y) => {x.Description = y.GetString(); } },
@@ -180,35 +182,26 @@ namespace JSONSchema2POCO
 
         public string Title { get; set; }
 
+        public string Ref { get; set; }
+
         public string Description { get; set; }
 
-        public uint MultipleOf
+        public UInt32? MultipleOf
         {
-            get { return MultipleOf; }
-            set
-            {
-                if (value > 0)
-                {
-                    MultipleOf = value;
-                }
-                else
-                {
-                    throw new ArgumentException("MultipleOf must greater than 0");
-                }
-            }
+            get; set;
         }
 
-        public uint Maximum { get; set; }
+        public UInt32? Maximum { get; set; }
 
-        public bool ExclusiveMaximum { get; set; }
+        public bool? ExclusiveMaximum { get; set; }
 
-        public uint Mininum { get; set; }
+        public UInt32? Mininum { get; set; }
 
-        public bool ExclusiveMinimum { get; set; }
+        public bool? ExclusiveMinimum { get; set; }
 
-        public uint MaxLength { get; set; }
+        public UInt32? MaxLength { get; set; }
 
-        public uint MinLength { get; set; }
+        public UInt32? MinLength { get; set; }
 
         public string Pattern { get; set; }
 
@@ -216,15 +209,15 @@ namespace JSONSchema2POCO
 
         public AnyOf<JSONSchema, SchemaArray> Items { get; set; }
 
-        public uint MaxItems { get; set; }
+        public UInt32? MaxItems { get; set; }
 
-        public uint MinItems { get; set; }
+        public UInt32? MinItems { get; set; }
 
-        public bool UniqueItems { get; set; }
+        public bool? UniqueItems { get; set; }
 
-        public uint MaxProperties { get; set; }
+        public UInt32? MaxProperties { get; set; }
 
-        public uint MinProperties { get; set; }
+        public UInt32? MinProperties { get; set; }
 
         public StringArray Required { get; set; }
 
@@ -249,13 +242,144 @@ namespace JSONSchema2POCO
         public SchemaArray OneOf { get; set; }
 
         public JSONSchema Not { get; set; }
+        public JsonElement? Default { get; private set; }
 
-        public JSONSchema(JsonDocument schema) : this(schema.RootElement)
+        public override string ToString()
+        {
+            return ToString(0, new HashSet<JSONSchema>());
+        }
+
+        private string ToString(int indent, HashSet<JSONSchema> visited)
+        {
+            StringBuilder sb = new StringBuilder();
+            if (visited.Contains(this)){
+                sb.Append(spaces(indent));
+                sb.Append("$ref");
+                return sb.ToString();
+            }
+            visited.Add(this);
+            sb.Append('{');            
+            PropertyInfo[] fields = typeof(JSONSchema).GetProperties();
+            foreach (PropertyInfo field in fields)
+            {
+                if (field.GetValue(this) == null) continue;
+
+                sb.AppendLine();
+                sb.Append(spaces(indent + 1));
+                sb.Append("\"" + field.Name + "\" : ");
+
+                if (field.PropertyType == typeof(string) || field.PropertyType == typeof(UInt32?) || field.PropertyType == typeof(bool?) || field.PropertyType == typeof(SimpleType))
+                {
+
+                    sb.Append("\"");
+                    sb.Append(field.GetValue(this));
+                    sb.Append("\"");
+                }
+
+                if (field.PropertyType == typeof(Dictionary<string, JSONSchema>))
+                {
+                    sb.Append("{");
+                    Dictionary<string, JSONSchema> dict = field.GetValue(this) as Dictionary<string, JSONSchema>;
+                    int n = dict.Count;
+                    int i = 1;
+                    foreach (string key in dict.Keys)
+                    {
+                        sb.AppendLine();
+                        sb.Append(spaces(indent + 2));
+                        sb.Append("\"" + key + "\": ");
+                        sb.Append(dict[key].ToString(indent + 2, visited));
+                        if (i < n) sb.Append(',');
+                    }
+                    sb.AppendLine();
+                    sb.Append(spaces(indent + 1) + "}");
+                }
+
+                System.Type fieldType = field.PropertyType;
+                Object fieldValue = field.GetValue(this);
+
+                if (field.PropertyType.IsGenericType && field.PropertyType.GetGenericTypeDefinition() == typeof(AnyOf<,>))
+                {
+                    fieldType = (System.Type)field.PropertyType.GetMethod("GetUnderlyingType").Invoke(field.GetValue(this), null);
+                    //sb.Append(fieldType.Name);
+                    fieldValue = field.PropertyType.GetMethod("GetValue").Invoke(field.GetValue(this), null);
+                }
+
+
+                if (fieldType == typeof(SimpleType))
+                {
+                    sb.Append("\"");
+                    sb.Append((fieldValue as SimpleType).Value);
+                    sb.Append("\"");
+                }
+
+
+                if (fieldType == typeof(SchemaArray))
+                {
+                    sb.Append("[");
+                    SchemaArray arr = fieldValue as SchemaArray;
+                    int n = arr.Count;
+                    int i = 1;
+                    foreach (JSONSchema schema in arr)
+                    {
+                        sb.AppendLine();
+                        sb.Append(spaces(indent + 1));
+                        sb.Append(schema.ToString(indent + 1, visited));
+                        if (i < n) sb.Append(',');
+                    }
+                    sb.AppendLine();
+                    sb.Append(spaces(indent + 1) + "]");
+                }
+
+                if (fieldType == typeof(JSONSchema))
+                {
+                    sb.Append((fieldValue as JSONSchema).ToString(indent + 1, visited));
+                }
+
+                if (fieldType == typeof(UniqueNonEmptyList<JsonElement>))
+                {
+                    var list = fieldValue as UniqueNonEmptyList<JsonElement>;
+                    sb.Append("[ ");
+                    int n = list.Count;
+                    int i = 1;
+                    foreach (JsonElement jsonElement in list)
+                    {
+                        sb.Append(jsonElement.ToString());
+                        if (i < n) sb.Append(", ");
+                    }
+                    sb.Append(" ]");
+                }
+
+                if (fieldType == typeof(JsonElement?))
+                {
+                    JsonElement jsonElement = (JsonElement)fieldValue;
+                    sb.Append(jsonElement.ToString());
+                }
+
+            }
+            sb.AppendLine();
+            sb.Append(spaces(indent));
+            sb.Append('}');
+            return sb.ToString();
+        }
+
+        private StringBuilder spaces(int indent)
+        {
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < indent; i++)
+            {
+                sb.Append("  ");
+            }
+            return sb;
+        }
+
+        public JSONSchema(JsonDocument schema) : this(schema.RootElement,true)
         {
         }
 
-        public JSONSchema(JsonElement root)
-        {
+        public JSONSchema(JsonElement root) : this(root, false) { }
+
+        public JSONSchema(JsonElement root, bool isTopLevel)
+        {            
             if (root.ValueKind != JsonValueKind.Object)
             {
                 throw new ArgumentException("Invalid Json Schema");
@@ -276,10 +400,49 @@ namespace JSONSchema2POCO
                 }
             }
 
+            if (isTopLevel)
+            {
+                replaceRefs(this, this);
+            }
+
         }
 
+        private void replaceRefs(JSONSchema schema, JSONSchema root)
+        {
+            if (schema.Properties == null)
+            {
+                return;
+            }
 
+            List<string> propertiesList = new List<string>(schema.Properties.Keys);
+            foreach(string property in propertiesList)
+            {
+                if (schema.Properties[property]?.Ref != null){
+                    schema.Properties[property]= convertRefToSchema(schema.Properties[property].Ref, root);
+                }
+            }
+        }
 
+        private JSONSchema convertRefToSchema(string @ref, JSONSchema root)
+        {
+            if(@ref.Equals("#"))
+            {
+                return root;
+            }
+            else
+            {                
+                var paths = @ref.Split('/');
+                if (paths.Length == 3 && paths[0].Equals("#") && paths[1].Equals("definitions"))
+                {
+                    return root.Definitions[paths[2]];
+                }
+                else
+                {
+                    throw new NotImplementedException("this type of reference is not supported");
+                }
+
+            }
+        }
     }
 
     public class SimpleType
@@ -299,6 +462,10 @@ namespace JSONSchema2POCO
             }
         }
 
+        public override string ToString()
+        {
+            return Value;
+        }
     }
 
 

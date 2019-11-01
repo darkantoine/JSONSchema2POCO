@@ -67,6 +67,9 @@ namespace JSONSchema2POCO.Tests
         public void TestDraft04Schema()
         {
             JSONSchema draft04Schema = new JSONSchema(draft04SchemaJson);
+
+            Console.WriteLine(draft04Schema.ToString());
+
             TestSimpleType(draft04Schema, "object");
 
  
@@ -82,6 +85,7 @@ namespace JSONSchema2POCO.Tests
 
             SchemaArray anyOf = additionalItems.AnyOf as SchemaArray;
             TestSimpleType(anyOf[0], "boolean");
+            Assert.AreEqual(draft04Schema, draft04Schema.Properties["not"]);
         }
     }
 }
