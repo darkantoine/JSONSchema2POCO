@@ -118,3 +118,7 @@ JSONSchema2POCO.Tests/obj/JSONSchema2POCO.Tests.csproj.nuget.g.targets
 JSONSchema2POCO.Tests/obj/project.assets.json
 JSONSchema2POCO.Tests/obj/
 .vs/
+ClassGenerator/obj/
+ClassGenerator/bin/
+JSONSchema/obj/
+JSONSchema2POCO.Tests/bin/

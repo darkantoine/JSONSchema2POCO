@@ -5,7 +5,12 @@ VisualStudioVersion = 16.0.29025.244
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "JSONSchema", "JSONSchema\JSONSchema.csproj", "{5882BE30-4CE1-4273-8052-F6747926E231}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "JSONSchema2POCO.Tests", "JSONSchema2POCO.Tests\JSONSchema2POCO.Tests.csproj", "{5CDC0668-5218-4628-AFB2-A04DA05243E2}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "JSONSchema2POCO.Tests", "JSONSchema2POCO.Tests\JSONSchema2POCO.Tests.csproj", "{5CDC0668-5218-4628-AFB2-A04DA05243E2}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ClassGenerator", "ClassGenerator\ClassGenerator.csproj", "{B0D84F6D-872B-463A-B025-0013A6491DB5}"
+	ProjectSection(ProjectDependencies) = postProject
+		{5882BE30-4CE1-4273-8052-F6747926E231} = {5882BE30-4CE1-4273-8052-F6747926E231}
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -21,6 +26,10 @@ Global
 		{5CDC0668-5218-4628-AFB2-A04DA05243E2}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{5CDC0668-5218-4628-AFB2-A04DA05243E2}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{5CDC0668-5218-4628-AFB2-A04DA05243E2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B0D84F6D-872B-463A-B025-0013A6491DB5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B0D84F6D-872B-463A-B025-0013A6491DB5}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B0D84F6D-872B-463A-B025-0013A6491DB5}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B0D84F6D-872B-463A-B025-0013A6491DB5}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

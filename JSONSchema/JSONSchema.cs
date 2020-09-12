@@ -112,6 +112,7 @@ namespace JSONSchema2POCO
                 foreach(JsonProperty property in y.EnumerateObject())
                 {
                     x.Definitions[property.Name]= new JSONSchema(property.Value);
+                    x.Definitions[property.Name].Title = x.Definitions[property.Name].Title ?? property.Name;
                 }
             }
             },
@@ -254,11 +255,12 @@ namespace JSONSchema2POCO
             StringBuilder sb = new StringBuilder();
             if (visited.Contains(this)){
                 sb.Append(spaces(indent));
-                sb.Append("$ref");
+                sb.Append("$ref: ");
+                sb.Append(this.GetHashCode());
                 return sb.ToString();
             }
             visited.Add(this);
-            sb.Append('{');            
+            sb.Append('{');             
             PropertyInfo[] fields = typeof(JSONSchema).GetProperties();
             foreach (PropertyInfo field in fields)
             {
@@ -402,28 +404,89 @@ namespace JSONSchema2POCO
 
             if (isTopLevel)
             {
-                replaceRefs(this, this);
+                ReplaceRefs(this, this);
             }
 
         }
 
-        private void replaceRefs(JSONSchema schema, JSONSchema root)
+        private static void ReplaceRefs(JSONSchema schema, JSONSchema root)
         {
-            if (schema.Properties == null)
+            ReplaceRefsInDictionary(schema.Properties, root);
+            ReplaceRefsInDictionary(schema.Definitions, root);
+            ReplaceRefsInDictionary(schema.PatternProperties, root);
+
+            ReplaceRefsInAnyOf(schema.AdditionalProperties, root);
+            ReplaceRefsInAnyOf(schema.AdditionalItems, root);
+            ReplaceRefsInAnyOf(schema.Items, root);
+
+            ReplaceRefsInSchemaArray(schema.AnyOf, root);
+            ReplaceRefsInSchemaArray(schema.AllOf, root);
+            ReplaceRefsInSchemaArray(schema.OneOf, root);
+
+          
+
+            if (schema.Not?.Ref != null)
             {
-                return;
+                schema.Not = convertRefToSchema(schema.Not.Ref, root);
             }
 
-            List<string> propertiesList = new List<string>(schema.Properties.Keys);
-            foreach(string property in propertiesList)
+
+        }
+
+        private static void ReplaceRefsInAnyOf<T1,T2>(AnyOf<T1,T2> anyOf, JSONSchema root)
+        {
+            if (anyOf?.GetValue() is JSONSchema)
             {
-                if (schema.Properties[property]?.Ref != null){
-                    schema.Properties[property]= convertRefToSchema(schema.Properties[property].Ref, root);
+                var anyOfSchema = (JSONSchema)anyOf.GetValue();
+                if (anyOfSchema?.Ref != null)
+                {
+                    anyOf.ChangeValue(convertRefToSchema(anyOfSchema.Ref, root));
+                }
+            }
+
+            if (anyOf?.GetValue() is SchemaArray)
+            {
+                var anyOfSchema = (SchemaArray)anyOf.GetValue();
+                ReplaceRefsInSchemaArray(anyOfSchema, root);
+            }
+
+
+        }
+
+        private static void ReplaceRefsInSchemaArray(SchemaArray array, JSONSchema root)
+        {
+            if (array?.Count > 0)
+            {
+                for (int i = 0; i < array.Count; i++)
+                {
+                    if (array[i]?.Ref != null)
+                    {
+                        array[i] = convertRefToSchema(array[i].Ref, root);
+                    }
                 }
             }
         }
 
-        private JSONSchema convertRefToSchema(string @ref, JSONSchema root)
+        private static void ReplaceRefsInDictionary(Dictionary<string, JSONSchema> dictionary, JSONSchema root)
+        {
+            if (dictionary != null)
+            {
+                var keyList = new List<string>(dictionary.Keys);
+                foreach (string property in keyList)
+                {
+                    if (dictionary[property]?.Ref != null)
+                    {
+                        dictionary[property] = convertRefToSchema(dictionary[property].Ref, root);
+                    }
+                    else
+                    {
+                        ReplaceRefs(dictionary[property], root);
+                    }
+                }
+            }
+        }
+
+        private static JSONSchema convertRefToSchema(string @ref, JSONSchema root)
         {
             if(@ref.Equals("#"))
             {
@@ -447,9 +510,20 @@ namespace JSONSchema2POCO
 
     public class SimpleType
     {
-        static readonly HashSet<string> Values = new HashSet<string>(new string[] { "array", "boolean", "integer", "null", "number", "object", "string" });
+        public const string Array = "array";
+        public const string Boolean = "boolean";
+        public const string Integer = "integer";
+        public const string Null = "null";
+        public const string Number = "number";
+        public const string Object = "object";
+        public const string String = "string";
 
-        public readonly string Value;
+        static readonly HashSet<string> Values = new HashSet<string>(new string[] { Array, Boolean, Integer, Null, Number, Object, String });
+
+        public string Value
+        {
+            get;
+        }
         public SimpleType(String value)
         {
             if (Values.Contains(value))

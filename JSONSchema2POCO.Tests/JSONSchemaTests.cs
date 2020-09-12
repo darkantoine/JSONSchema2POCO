@@ -68,6 +68,7 @@ namespace JSONSchema2POCO.Tests
         {
             JSONSchema draft04Schema = new JSONSchema(draft04SchemaJson);
 
+            Console.WriteLine(draft04Schema.GetHashCode());
             Console.WriteLine(draft04Schema.ToString());
 
             TestSimpleType(draft04Schema, "object");

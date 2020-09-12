@@ -13,6 +13,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\ClassGenerator\ClassGenerator.csproj" />
     <ProjectReference Include="..\JSONSchema\JSONSchema.csproj" />
   </ItemGroup>
 
@@ -23,6 +24,9 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Update="testSchema.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Update="draft-04.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
