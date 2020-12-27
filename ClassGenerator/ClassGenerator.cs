@@ -3,6 +3,7 @@ using System.CodeDom;
 using System.CodeDom.Compiler;
 using System.Collections.Generic;
 using System.IO;
+using System.Net.Http.Headers;
 using System.Reflection;
 using System.Text;
 using static ClassGenerator.StringUtils;
@@ -54,38 +55,30 @@ namespace JSONSchema2POCO
             return sourceWriter.ToString();
         }
 
-        protected static CodeConditionStatement If(CodeExpression condition, params CodeStatement[] trueStatements) {
-             return new CodeConditionStatement(condition, trueStatements);
+        protected string ConvertToIdentifier(string s)
+        {
+            if(string.IsNullOrWhiteSpace(s))
+            {
+                return "_";
             }
-
-        protected static CodeConditionStatement If(CodeExpression condition, CodeStatement[] trueStatements, CodeStatement[] falseStatements)
-        {
-            return new CodeConditionStatement(condition, trueStatements, falseStatements);
+            StringBuilder sb = new StringBuilder();
+            if (!IsIdentifierStartCharacter(s[0]) || IsKeyword(s))
+            {
+                sb.Append('_');
+            }
+            foreach(char c in s)
+            {
+                if (IsIdentifierPartCharacter(c))
+                {
+                    sb.Append(c);
+                }
+                else
+                {
+                    sb.Append("_");
+                }
+            }
+            return sb.ToString();
         }
 
-        protected static CodeBinaryOperatorExpression Compare(CodeExpression left, CodeBinaryOperatorType op, CodeExpression right) {
-            return new CodeBinaryOperatorExpression(left, op, right);
-        }
-
-        protected static CodePropertySetValueReferenceExpression ValueRef()
-        {
-            return new CodePropertySetValueReferenceExpression();
-        }
-
-        protected static CodeThrowExceptionStatement Throw(Type ExceptionType)
-        {
-            return new CodeThrowExceptionStatement(
-                                new CodeObjectCreateExpression(ExceptionType));
-        }
-
-        protected static CodeAssignStatement Assign(CodeExpression left, CodeExpression right)
-        {
-            return new CodeAssignStatement(left, right);
-        }
-
-        protected static CodeFieldReferenceExpression ThisDot(string fieldName)
-        {
-            return new CodeFieldReferenceExpression(new CodeThisReferenceExpression(), fieldName);
-        }
     }   
 }

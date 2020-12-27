@@ -1,0 +1,6 @@
+﻿{
+	"type": "string",
+	"minLength": 10,
+	"maxLength": 25,
+	"pattern":  "a*\n"
+}

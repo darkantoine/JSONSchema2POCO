@@ -5,6 +5,8 @@ using System.Text.Json;
 using static System.Text.Json.JsonElement;
 using System.Text;
 using System.Reflection;
+using System.Linq;
+using static JSONSchema2POCO.Utils;
 
 namespace JSONSchema2POCO
 {
@@ -374,6 +376,11 @@ namespace JSONSchema2POCO
             return sb;
         }
 
+        private JSONSchema()
+        {
+
+        }
+
         public JSONSchema(JsonDocument schema) : this(schema.RootElement,true)
         {
         }
@@ -398,7 +405,7 @@ namespace JSONSchema2POCO
                 }
                 else
                 {
-                    throw new ArgumentException("Invalid JSON Schema");
+                    throw new ArgumentException($"Invalid JSON Schema. {current.Name} is not a supported JsonSchema property");
                 }
             }
 
@@ -441,6 +448,10 @@ namespace JSONSchema2POCO
                 if (anyOfSchema?.Ref != null)
                 {
                     anyOf.ChangeValue(convertRefToSchema(anyOfSchema.Ref, root));
+                }
+                else
+                {
+                    ReplaceRefs(anyOfSchema, root);
                 }
             }
 
@@ -506,6 +517,85 @@ namespace JSONSchema2POCO
 
             }
         }
+
+        public static JSONSchema MergeSchemas(SchemaArray schemas)
+        {
+            JSONSchema result = new JSONSchema();
+
+            //handle recursivity
+            schemas = new SchemaArray(
+                schemas.Where(x => x.AllOf == null || !x.AllOf.Any())
+                .Union(
+                    schemas.Where(x => x.AllOf != null && x.AllOf.Any())
+                    .Select(x => MergeSchemas(x.AllOf))).ToList());
+
+            //This won't raise an exception if different (incompatible) types are defined
+            result.Type = schemas.Where(x => x.Type != null).Select(x => x.Type).FirstOrDefault();
+            
+            var multiples = schemas.Where(x => x.MultipleOf.HasValue).Select(x => x.MultipleOf.Value);
+            if (multiples.Any())
+            {
+                result.MultipleOf = multiples.Aggregate((uint)1, (lcm, next) => LCM(lcm, next));
+            }
+            
+            var max = schemas.Where(x => x.Maximum.HasValue).Select(x => x.Maximum);
+            if(max.Any())
+            {
+                result.Maximum = max.Min();
+                result.ExclusiveMaximum = schemas.Where(x => x.ExclusiveMaximum.HasValue && x.Maximum == result.Maximum).Select(x => x.ExclusiveMaximum).FirstOrDefault();
+            }
+
+            var min = schemas.Where(x => x.Mininum.HasValue).Select(x => x.Mininum);
+            if (min.Any())
+            {
+                result.Mininum = min.Max();
+                result.ExclusiveMinimum = schemas.Where(x => x.ExclusiveMinimum.HasValue && x.Mininum == result.Mininum).Select(x => x.ExclusiveMinimum).FirstOrDefault();
+             }
+
+            var maxLength = schemas.Where(x => x.MaxLength.HasValue).Select(x => x.MaxLength);
+            if (maxLength.Any())
+            {
+                result.MaxLength = maxLength.Min();
+            }
+
+            var minLength = schemas.Where(x => x.MinLength.HasValue).Select(x => x.MinLength);
+            if (minLength.Count() > 0)
+            {
+                result.MinLength = minLength.Max();
+            }
+
+            var patterns = schemas.Where(x => !string.IsNullOrEmpty(x.Pattern)).Select(x => x.Pattern);
+            if(patterns.Any())
+            {
+                result.Pattern = string.Concat(patterns.Select(x => string.Format("(?={0})", x)));
+            }
+            
+
+            //TODO: items
+
+            var maxItems = schemas.Where(x => x.MaxItems.HasValue).Select(x => x.MaxItems);
+            if (maxItems.Any())
+            {
+                result.MaxItems = maxItems.Min();
+            }
+
+            var minItems = schemas.Where(x => x.MinItems.HasValue).Select(x => x.MinItems);
+            if (minItems.Any())
+            {
+                result.MinItems = minItems.Max();
+            }
+
+            var properties = schemas.Where(x => x.Properties!=null && x.Properties.Any()).Select(x => x.Properties);
+            if (properties.Any())
+            {
+                result.Properties = properties.SelectMany(dict => dict)
+                         .ToLookup(pair => pair.Key, pair => pair.Value)
+                         .ToDictionary(group => group.Key, group => group.First());
+            }
+
+            return result;
+
+        }
     }
 
     public class SimpleType
@@ -569,5 +659,10 @@ namespace JSONSchema2POCO
                 this.Add(new JSONSchema(schema));
             }
         }
-    }
+
+        public SchemaArray(List<JSONSchema> schemas)
+        {
+            this.AddRange(schemas);
+        }
+    }    
 }

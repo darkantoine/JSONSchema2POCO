@@ -1,0 +1,16 @@
+﻿{
+	"type": "object",
+  "allOf":[
+  {
+    "type": "number",
+    "minimum" : 10,
+    "maximum": 25
+  },
+  {
+  "type": "number",
+  "minimum": 5,
+  "maximum": 20,
+  "exclusiveMaximum": true
+  }
+  ]
+}

@@ -1,0 +1,16 @@
+﻿{
+	"allOf":[
+  {
+    "type": "string",
+    "minLength" : 10,
+    "maxLength": 25,
+    "pattern": "[a-zA-Z]"
+  },
+  {
+  "type": "string",
+  "minLength": 5,
+  "maxLength": 20,
+  "pattern": "[a-yB-Z]"
+  }
+  ]
+}

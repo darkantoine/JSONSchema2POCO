@@ -1,0 +1,15 @@
+﻿{
+  "allOf":[
+  {
+    "type": "number",
+    "multipleOf": 2
+  },
+  {
+  "type": "number",
+  "multipleOf": 3
+  },
+  {
+    "multipleOf": 4
+  }  
+  ]
+}

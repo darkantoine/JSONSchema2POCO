@@ -1,0 +1,33 @@
+﻿{
+	"allOf": [
+		{
+			"type": "object",
+			"properties": {
+				"astring": {
+					"type": "string"
+				},
+				"anumber": {
+					"type": "number"
+				}
+			}
+		},
+		{
+			"properties": {
+					"anotherString": {
+						"type": "string"
+					},
+					"anothernumber": {
+						"type": "number"
+					}
+				}
+		},
+		{
+			"type": "object",
+			"properties":{
+					"aBoolean": {
+						"type":  "boolean"
+					}
+				}
+		}
+	]
+}

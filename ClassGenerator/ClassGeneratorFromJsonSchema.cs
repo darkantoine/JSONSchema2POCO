@@ -9,6 +9,13 @@ using static ClassGenerator.CodeTypeDeclarationExtensions;
 using static ClassGenerator.CodeDomUtils;
 using static ClassGenerator.StringUtils;
 using System.Reflection;
+using System.Text.Json;
+using System.Net.Http.Headers;
+using System.Runtime.InteropServices;
+using System.Reflection.Emit;
+using System.Runtime.Serialization;
+using System.IO;
+using System.CodeDom.Compiler;
 
 namespace JSONSchema2POCO
 {
@@ -18,6 +25,7 @@ namespace JSONSchema2POCO
 
         private readonly Dictionary<JSONSchema, GenerationResult> context;
         private readonly HashSet<string> propertyNames = new HashSet<string>();
+        private readonly static Type NumberDefaultType = typeof(double);
 
         public ClassGeneratorFromJsonSchema(JSONSchema schema, string title = null) : base(title ?? schema.Title)
         {
@@ -25,7 +33,7 @@ namespace JSONSchema2POCO
             context = new Dictionary<JSONSchema, GenerationResult>();
         }
 
-        private ClassGeneratorFromJsonSchema(JSONSchema schema, Dictionary<JSONSchema, GenerationResult> context, string title = null) : base( title ?? schema.Title)
+        private ClassGeneratorFromJsonSchema(JSONSchema schema, Dictionary<JSONSchema, GenerationResult> context, string title = null) : base(title ?? schema.Title)
         {
             this.schema = schema;
             this.context = context;
@@ -33,8 +41,23 @@ namespace JSONSchema2POCO
 
         private CodeTypeDeclaration GenerateClass()
         {
-            context.Add(schema, new GenerationResult() { TypeName = targetClass.Name });
-            if (schema.Type?.Value is SimpleType)
+            if (!context.ContainsKey(schema))
+            {
+
+                context.Add(schema, new GenerationResult()
+                {
+                    TypeName = targetClass.Name,
+                    Type = MyTypeBuilder.CreateType(targetClass.Name),
+                    ClassGenerator = this
+                });
+            }
+
+            if (schema.Enum?.Count > 0)
+            {
+                return GenerateClassFromEnumSchema();
+            }
+
+            if (schema.Type?.Value is SimpleType && (schema.Type.Value as SimpleType).Value != SimpleType.Object)
             {
                 var schemaType = schema.Type.Value as SimpleType;
                 if (schemaType.Value == SimpleType.Integer)
@@ -42,9 +65,14 @@ namespace JSONSchema2POCO
                     return GenerateClassFromIntegerSchema();
                 }
 
-                if(schemaType.Value == SimpleType.Number)
+                if (schemaType.Value == SimpleType.Number)
                 {
                     return GenerateClassFromNumberSchema();
+                }
+
+                if (schemaType.Value == SimpleType.String)
+                {
+                    return GenerateClassFromStringSchema();
                 }
 
                 if (schemaType.Value == SimpleType.Array)
@@ -52,7 +80,7 @@ namespace JSONSchema2POCO
                     return GenerateClassFromArraySchema();
                 }
 
-            }         
+            }
             var definitions = schema.Definitions;
             if (definitions != null)
             {
@@ -62,7 +90,13 @@ namespace JSONSchema2POCO
                     if (!context.ContainsKey(definition))
                     {
                         var nestedClassGenerator = new ClassGeneratorFromJsonSchema(definition, context);
-                        AddNestedClass(nestedClassGenerator.GenerateClass());                        
+                        context[definition] = new GenerationResult()
+                        {
+                            Type = MyTypeBuilder.CreateType(nestedClassGenerator.targetClass.Name),
+                            TypeName = nestedClassGenerator.targetClass.Name,
+                            ClassGenerator = nestedClassGenerator
+                        };
+                        nestedClassGenerator.GenerateClass();
                     }
                     //context.Add(definition, new GenerationResult() { TypeName = nestedClassGenerator.targetClass.Name });
 
@@ -70,6 +104,33 @@ namespace JSONSchema2POCO
             }
 
             var properties = schema.Properties;
+            var additionalProperties = schema.AdditionalProperties;
+
+            //Oneof/AnyOf/AllOf are only supported when there are no properties or additionalProperties and when the schema type is not a primitive type or array type
+            if (properties == null && additionalProperties == null)
+            {
+                if (schema.OneOf != null && schema.OneOf.Count > 0)
+                {
+                    return GenerateClassFromOneOfAnyOfSchema(true);
+                }
+
+                if (schema.AnyOf != null && schema.AnyOf.Count > 0)
+                {
+                    return GenerateClassFromOneOfAnyOfSchema(false);
+                }
+
+                if (schema.AllOf != null && schema.AllOf.Count > 0)
+                {
+                    var mergedSchema = JSONSchema.MergeSchemas(schema.AllOf);
+                    var mergedClassGenerator = new ClassGeneratorFromJsonSchema(mergedSchema,this.targetClass.Name);
+                    targetClass = mergedClassGenerator.GenerateClass();
+                    context[schema] = mergedClassGenerator.context[mergedSchema];
+                    return targetClass;
+
+                }
+
+            }
+            
             if (properties != null)
             {
                 foreach (string propertyName in properties.Keys)
@@ -87,16 +148,366 @@ namespace JSONSchema2POCO
                     {
                         targetClass.AddProperty(cleanPropertyName, context[property].TypeName);
                     }
-                    else if (property.Type?.GetUnderlyingType() == typeof(SimpleType))
+                    else if (property.Type?.GetUnderlyingType() == typeof(SimpleType)
+                        && (property.Type.Value as SimpleType).Value != SimpleType.Object
+                        && (property.Type.Value as SimpleType).Value != SimpleType.Array
+                        )
                     {
-                        targetClass.AddProperty( cleanPropertyName, ComputeType((SimpleType)property.Type.GetValue()));
+                        targetClass.AddProperty(cleanPropertyName, ComputeType((SimpleType)property.Type.GetValue()));
+                    }
+                    else
+                    {
+                        var nestedClassGenerator = new ClassGeneratorFromJsonSchema(property, context, cleanPropertyName);
+                        context[property] = new GenerationResult()
+                        {
+                            Type = MyTypeBuilder.CreateType(nestedClassGenerator.targetClass.Name),
+                            TypeName = nestedClassGenerator.targetClass.Name,
+                            ClassGenerator = nestedClassGenerator
+                        };
+                        nestedClassGenerator.GenerateClass();
+                        targetClass.AddProperty(cleanPropertyName, context[property].Type);
                     }
                 }
             }
 
+            
+            if (additionalProperties != null)
+            {
+                if (additionalProperties.Value is bool)
+                {
+                    if ((bool)additionalProperties.Value == true)
+                    {
+                        targetClass.BaseTypes.Add(new CodeTypeReference(typeof(Dictionary<string, object>)));
+                    }
+                }
+                else
+                {
+                    var additionalPropertiesSchema = additionalProperties.Value as JSONSchema;
+                    if (!context.ContainsKey(additionalPropertiesSchema))
+                    {
+                        var nestedClassGenerator = new ClassGeneratorFromJsonSchema(additionalPropertiesSchema, context, context[schema].TypeName + "AdditionalProperties");
+                        context[additionalPropertiesSchema] = new GenerationResult()
+                        {
+                            Type = MyTypeBuilder.CreateType(nestedClassGenerator.targetClass.Name),
+                            TypeName = nestedClassGenerator.targetClass.Name,
+                            ClassGenerator = nestedClassGenerator
+                        };
+                        nestedClassGenerator.GenerateClass();
+                    }
+                    targetClass.BaseTypes.Add(new CodeTypeReference("Dictionary", new CodeTypeReference(typeof(string)), new CodeTypeReference(context[additionalPropertiesSchema].Type)));
+                    context[schema].Imports.Add("System.Collections.Generic");
+                }
+            }
+
+            
 
             return targetClass;
         }
+
+        private CodeTypeDeclaration GenerateClassFromStringSchema()
+        {
+            CodeMemberProperty property = NewProperty("Value", typeof(string), false) as CodeMemberProperty;
+            targetClass.AddProperty(property);
+            property.GetStatements.Add(new CodeMethodReturnStatement(new CodeFieldReferenceExpression(new CodeThisReferenceExpression(), "Value")));
+            if (schema.MinLength.HasValue)
+            {
+                property.SetStatements.Add(
+                    If(
+                    Compare(
+                        new CodeFieldReferenceExpression(ValueRef(), "Length"),
+                        CodeBinaryOperatorType.LessThan,
+                        new CodePrimitiveExpression((int)schema.MinLength.Value)
+                        ),
+                    Throw(typeof(ArgumentOutOfRangeException)
+                    )));
+            }
+            if (schema.MaxLength.HasValue)
+            {
+                property.SetStatements.Add(
+                    If(
+                    Compare(
+                        new CodeFieldReferenceExpression(ValueRef(),"Length"),
+                        CodeBinaryOperatorType.GreaterThan,
+                        new CodePrimitiveExpression((int)schema.MaxLength.Value)
+                        ),
+                    Throw(typeof(ArgumentOutOfRangeException)
+                    )));
+            }
+            if (!string.IsNullOrEmpty(schema.Pattern))
+            {
+                context[schema].Imports.Add("System.Text.RegularExpressions");
+                property.SetStatements.Add(
+                    new CodeVariableDeclarationStatement("Regex", "regex", new CodeObjectCreateExpression("Regex", Array(new CodeSnippetExpression("@"+ToLiteral(schema.Pattern))))));
+                property.SetStatements.Add(
+                    If(
+                    new CodeSnippetExpression("!regex.IsMatch(value)"),
+                    Throw(typeof(ArgumentOutOfRangeException)
+                    )));
+            }
+            property.SetStatements.Add(Assign(ThisDot("Value"), ValueRef()));
+            return targetClass;
+        }
+
+        private static string ToLiteral(string input)
+        {
+            using (var writer = new StringWriter())
+            {
+                using (var provider = CodeDomProvider.CreateProvider("CSharp"))
+                {
+                    provider.GenerateCodeFromExpression(new CodePrimitiveExpression(input), writer, null);
+                    return writer.ToString();
+                }
+            }
+        }
+
+        private CodeTypeDeclaration GenerateClassFromOneOfAnyOfSchema(bool handleOneOf)
+        {
+            ISet<string> subSchemasSet = new HashSet<string>();
+            int index = 0;
+            var schemaArray = handleOneOf ? schema.OneOf : schema.AnyOf;
+            foreach (JSONSchema subSchema in schemaArray)
+            {
+                if (context.ContainsKey(subSchema))
+                {
+                    subSchemasSet.Add(context[subSchema].TypeName);
+                }
+                else if (subSchema.Type?.GetUnderlyingType() == typeof(SimpleType)
+                    && (subSchema.Type.Value as SimpleType).Value != SimpleType.Object
+                    && (subSchema.Type.Value as SimpleType).Value != SimpleType.Array
+                    )
+                {
+                    subSchemasSet.Add(ComputeType((SimpleType)subSchema.Type.GetValue()).Name);
+                }
+                else
+                {
+                    var nestedClassGenerator = new ClassGeneratorFromJsonSchema(subSchema, context, string.Concat(targetClass.Name, handleOneOf?"OneOf":"AnyOf", index));
+                    context[subSchema] = new GenerationResult()
+                    {
+                        Type = MyTypeBuilder.CreateType(nestedClassGenerator.targetClass.Name),
+                        TypeName = nestedClassGenerator.targetClass.Name,
+                        ClassGenerator = nestedClassGenerator
+                    };
+                    nestedClassGenerator.GenerateClass();
+                    subSchemasSet.Add(nestedClassGenerator.targetClass.Name);
+                }
+                index++;
+            }
+
+
+            targetClass = new CodeTypeDeclaration(targetClass.Name)
+            {
+                IsClass = true,
+                TypeAttributes = TypeAttributes.Public
+            };
+
+            var field = new CodeMemberField()
+            {
+                Attributes = MemberAttributes.Private | MemberAttributes.Final,
+                Name = "Value",
+                Type = new CodeTypeReference(typeof(object))
+            };
+            targetClass.Members.Add(field);
+
+            CodeConstructor constructor = new CodeConstructor
+            {
+                Attributes = MemberAttributes.Private
+            };
+            constructor.Comments.Add(new CodeCommentStatement("Hiding visiblity of default constructor"));
+            targetClass.Members.Add(constructor);
+
+            CodeStatement[] codeStatements = new CodeStatement[subSchemasSet.Count+1];
+            index = 0;
+            foreach(string subSchemaName in subSchemasSet)
+            {
+                codeStatements[index] = If(NewSnippet("value is " + subSchemaName), new CodeAssignStatement(new CodeVariableReferenceExpression("Value"), new CodeVariableReferenceExpression("value")));
+                index++;
+            }
+            codeStatements[index] = Throw(typeof(ArgumentException), "Value's type is not correct");
+
+            CodeConstructor publicConstructor = NewPublicConstructor(
+                Array(NewParameter(typeof(object), "value")),
+                codeStatements
+                );
+            targetClass.Members.Add(publicConstructor);
+
+            foreach(string subSchemaName in subSchemasSet)
+            {
+                var implicitOperator = new CodeSnippetTypeMember(string.Format("\t\tpublic static implicit operator {0}({1} d) => ({0})d.Value;", subSchemaName, targetClass.Name));
+                targetClass.Members.Add(implicitOperator);
+
+                var explicitOperator = new CodeSnippetTypeMember(string.Format("\t\tpublic static explicit operator {0}({1} v) => new {0}(v);", targetClass.Name, subSchemaName));
+                targetClass.Members.Add(explicitOperator);
+            }
+
+            return targetClass;
+        }
+
+        private CodeTypeDeclaration GenerateClassFromEnumSchema()
+        {
+            context[schema].Imports.Add("System.Collections.Generic");
+            targetClass = new CodeTypeDeclaration(targetClass.Name)
+            {
+                IsClass = true,
+                TypeAttributes = TypeAttributes.Public
+            };
+
+
+            Type enumType = GetEnumType(schema);
+            string enumTypeString = GetTypeString(enumType);
+
+            int i = 1;
+            foreach (JsonElement enumValue in schema.Enum)
+            {
+                CodeMemberField f = new CodeMemberField()
+                {
+                    Attributes = MemberAttributes.Public | MemberAttributes.Static,
+                    InitExpression = new CodePrimitiveExpression(GetValue(enumValue)),
+                    Name = ConvertToIdentifier(enumValue.ToString()),
+                    Type = new CodeTypeReference("readonly " + enumTypeString)
+                };
+                i++;
+                targetClass.Members.Add(f);
+            }
+
+            var fieldType = new CodeTypeReference("HashSet", new CodeTypeReference(enumType));
+            CodeMemberField field = new CodeMemberField()
+            {
+                Attributes = MemberAttributes.Private | MemberAttributes.Final | MemberAttributes.Static,
+                Name = "Constants",
+                Type = fieldType,
+                InitExpression = new CodeObjectCreateExpression(fieldType, new CodeArrayCreateExpression(enumType, schema.Enum.Select(value => new CodeVariableReferenceExpression(ConvertToIdentifier(value.ToString()))).ToArray()))
+            };
+            targetClass.Members.Add(field);
+
+            field = new CodeMemberField()
+            {
+                Attributes = MemberAttributes.Private | MemberAttributes.Final,
+                Name = "Value",
+                Type = new CodeTypeReference(enumType)
+            };
+            targetClass.Members.Add(field);
+
+            CodeConstructor constructor = new CodeConstructor
+            {
+                Attributes = MemberAttributes.Private
+            };
+            constructor.Comments.Add(new CodeCommentStatement("Hiding visiblity of default constructor"));
+            targetClass.Members.Add(constructor);
+
+            CodeConstructor publicConstructor = NewPublicConstructor(
+                Array(NewParameter(enumTypeString, "value")),
+                Array(
+                    If(
+                        NewSnippet("!Constants.Contains(value)"),
+                        Throw(typeof(ArgumentException), "Value is not part of enum")
+                        ),
+                    new CodeAssignStatement(new CodeVariableReferenceExpression("Value"), new CodeVariableReferenceExpression("value"))
+                    )
+                );
+            targetClass.Members.Add(publicConstructor);
+
+            var implicitOperator = new CodeSnippetTypeMember(string.Format("\t\tpublic static implicit operator {0}({1} d) => d.Value;", enumTypeString, targetClass.Name));
+            targetClass.Members.Add(implicitOperator);
+
+            var explicitOperator = new CodeSnippetTypeMember(string.Format("\t\tpublic static explicit operator {0}({1} v) => new {0}(v);", targetClass.Name, enumTypeString));
+            targetClass.Members.Add(explicitOperator);
+
+            return targetClass;
+        }
+
+        private string GetTypeString(Type enumType)
+        {
+            if (!enumType.IsGenericType)
+            {
+                return enumType.Name;
+            }
+            return string.Concat(enumType.Name.Substring(0, enumType.Name.Length - 2), "<", enumType.GenericTypeArguments.First().Name, ">");
+        }
+
+        private object GetValue(JsonElement enumValue)
+        {
+            switch (enumValue.ValueKind)
+            {
+                case JsonValueKind.String: return enumValue.GetString();
+                case JsonValueKind.Number:
+                    if (enumValue.TryGetInt32(out Int32 intValue))
+                    {
+                        return enumValue.GetInt32();
+                    }
+                    if (enumValue.TryGetInt64(out Int64 LongValue))
+                    {
+                        return enumValue.GetInt64();
+                    }
+                    return enumValue.GetDouble();
+                case JsonValueKind.True:
+                case JsonValueKind.False:
+                    return enumValue.GetBoolean();
+                case JsonValueKind.Null:
+                    return null;
+                default:
+                    return enumValue.ToString();
+            }
+        }
+
+        private Type GetEnumType(JSONSchema schema)
+        {
+            if (schema.Type != null && schema.Type.Value is SimpleType)
+            {
+                return ComputeType(schema);
+            }
+
+            if (schema.Type == null)
+            {
+                HashSet<JsonValueKind> types = new HashSet<JsonValueKind>();
+                foreach (JsonElement enumValue in schema.Enum)
+                {
+                    types.Add(enumValue.ValueKind);
+                }
+                if (types.Count() == 1)
+                {
+                    switch (types.First())
+                    {
+                        case JsonValueKind.String: return typeof(string);
+                        case JsonValueKind.Number: return NumberDefaultType;
+                        case JsonValueKind.True:
+                        case JsonValueKind.False:
+                            return typeof(bool);
+                        default:
+                            return typeof(object);
+                    }
+                }
+                if (types.Count() == 2)
+                {
+                    if (types.Contains(JsonValueKind.False) && types.Contains(JsonValueKind.True))
+                    {
+                        return typeof(bool);
+                    }
+                    if (types.Contains(JsonValueKind.Null))
+                    {
+                        switch (types.Where(x => x != JsonValueKind.Null).First())
+                        {
+                            case JsonValueKind.String: return typeof(string); //strings can null
+                            case JsonValueKind.Number: return typeof(Nullable<>).MakeGenericType(NumberDefaultType);
+                            case JsonValueKind.True:
+                            case JsonValueKind.False:
+                                return typeof(Nullable<>).MakeGenericType(typeof(bool));
+                            default:
+                                return typeof(object);//objects can be null
+                        }
+                    }
+                }
+                if (types.Count() == 3)
+                {
+                    if (types.IsSubsetOf(new List<JsonValueKind> { JsonValueKind.Null, JsonValueKind.False, JsonValueKind.True }))
+                    {
+                        return typeof(Nullable<>).MakeGenericType(typeof(bool));
+                    }
+                }
+
+            }
+            return typeof(object);
+        }
+
 
         private CodeTypeDeclaration GenerateClassFromNumberSchema()
         {
@@ -131,7 +542,7 @@ namespace JSONSchema2POCO
             {
                 property.SetStatements.Add(
                     If(
-                    new CodeSnippetExpression(string.Format("Value % {0} != 0", schema.MultipleOf.Value)),
+                    new CodeSnippetExpression(string.Format("value % {0} != 0", schema.MultipleOf.Value)),
                     Throw(typeof(ArgumentOutOfRangeException)
                     )));
             }
@@ -182,23 +593,18 @@ namespace JSONSchema2POCO
 
         private CodeTypeDeclaration GenerateClassFromArraySchema()
         {
-            context[schema].Imports = new List<CodeNamespaceImport>();
-            context[schema].Imports.Add(new CodeNamespaceImport("System.Collections.Generic"));
-            var itemsSchema = schema.Items.Value as JSONSchema;
-            string itemsSchemaType;
-            if (context.ContainsKey(itemsSchema))
+            context[schema].Imports.Add("System.Collections.Generic");
+            Type itemsSchemaType = typeof(object);
+            if (schema.Items != null)
             {
-                itemsSchemaType = context[itemsSchema].TypeName;
+                var itemsSchema = schema.Items.Value as JSONSchema;
+                itemsSchemaType = context.ContainsKey(itemsSchema) ?
+                    context[itemsSchema].Type : ComputeType(itemsSchema);
             }
-            else
-            {
-                itemsSchemaType = ComputeType(itemsSchema);
-                
-            }
-            targetClass.BaseTypes.Add(new CodeTypeReference("List<" + itemsSchemaType + ">"));
-            this.globalnamespace.Imports.Add(new CodeNamespaceImport("System.Collections.Generic"));
 
-            if (schema.MinItems.HasValue && schema.MinItems.Value>0)
+            targetClass.BaseTypes.Add(new CodeTypeReference("List", new CodeTypeReference(itemsSchemaType)));
+
+            if (schema.MinItems.HasValue && schema.MinItems.Value > 0)
             {
                 CodeConstructor constructor = new CodeConstructor
                 {
@@ -208,15 +614,18 @@ namespace JSONSchema2POCO
                     string.Format("Hiding visiblity of default constructor as a minimum of {0} elements is required", schema.MinItems.Value)));
                 targetClass.Members.Add(constructor);
 
-                CodeConstructor publicConstructor = new CodeConstructor
-                {
-                    Attributes = MemberAttributes.Public
-                };
-                publicConstructor.Parameters.Add(new CodeParameterDeclarationExpression("IEnumerable<"+ itemsSchemaType + ">", "collection"));
-                publicConstructor.Statements.Add(If(new CodeSnippetExpression(string.Format("collection.Count() < {0}", schema.MinItems.Value)), Throw(typeof(ArgumentException))));
-                    targetClass.Members.Add(publicConstructor);
+                CodeConstructor publicConstructor = NewPublicConstructor(
+                    Array(NewParameter("IEnumerable<" + itemsSchemaType.Name + ">", "collection")),
+                    Array(
+                        If(
+                            NewSnippet("collection.Count() < {0}", schema.MinItems.Value),
+                            Throw(typeof(ArgumentException))
+                            )
+                        )
+                    );
+                targetClass.Members.Add(publicConstructor);
 
-                context[schema].Imports.Add(new CodeNamespaceImport("System.Linq"));
+                context[schema].Imports.Add("System.Linq");
             }
 
             return targetClass;
@@ -224,62 +633,73 @@ namespace JSONSchema2POCO
 
         private string Clean(string str)
         {
-            Regex rgx = new Regex("[^a-zA-Z0-9 -]");            
-            return UppercaseFirst(rgx.Replace(str, "")); 
+            Regex rgx = new Regex("[^a-zA-Z0-9 -]");
+            return UppercaseFirst(rgx.Replace(str, ""));
         }
 
-        public new void Generate()
+        public void GenerateAll()
         {
-            GenerateClass();
-            HashSet<CodeNamespaceImport> importSet = new HashSet<CodeNamespaceImport>();
-            foreach(var result in context.Values)
+            this.GenerateClass();
+            foreach (var result in context.Values)
             {
-                if (result.Imports != null)
+                if (result.Imports.Any())
                 {
-                    importSet.UnionWith(result.Imports);
+                    var codeNamespace = new CodeNamespace();
+                    codeNamespace.Imports.AddRange(result.Imports.Select(x => new CodeNamespaceImport(x)).ToArray());
+                    result.ClassGenerator.targetUnit.Namespaces.Add(codeNamespace);
                 }
+                result.ClassGenerator.Generate();
             }
-            this.globalnamespace.Imports.AddRange(importSet.ToArray());
-            base.Generate();
         }
 
-        private string ComputeType(JSONSchema schema)
+        public Dictionary<string, string> PrintAll()
         {
-            if(schema.Type?.GetUnderlyingType() == typeof(SimpleType))
+            var results = new Dictionary<string, string>();
+            foreach (var result in context.Values)
+            {
+                results.Add(result.TypeName, result.ClassGenerator.Print());
+
+            }
+            return results;
+        }
+
+        private Type ComputeType(JSONSchema schema)
+        {
+            if (schema.Type?.GetUnderlyingType() == typeof(SimpleType))
             {
                 var simpleType = schema.Type.Value as SimpleType;
                 switch (simpleType.Value)
                 {
                     case SimpleType.Boolean:
-                        return typeof(Boolean).Name;
+                        return typeof(Boolean);
                     case SimpleType.String:
-                        return typeof(string).Name;
+                        return typeof(string);
                     case SimpleType.Integer:
-                        return typeof(Int32).Name;
+                        return typeof(Int32);
                     case SimpleType.Number:
-                        return typeof(Decimal).Name;
+                        return typeof(Decimal);
                     case SimpleType.Object:
-                        return typeof(object).Name;
+                        return typeof(object);
                     case SimpleType.Array:
-                        if(schema.Items?.Value is JSONSchema)
+                        if (schema.Items?.Value is JSONSchema)
                         {
                             var itemsSchema = schema.Items.Value as JSONSchema;
                             if (context.ContainsKey(itemsSchema))
                             {
-                                return "List<"+context[itemsSchema].TypeName+">";
+                                return typeof(List<>).MakeGenericType(context[itemsSchema].Type);
                             }
                             else
                             {
-                                return "List<" + ComputeType(itemsSchema) + ">";
+                                return typeof(List<>).MakeGenericType(ComputeType(itemsSchema));
                             }
                         }
-                        return typeof(IList).Name;
+                        return typeof(IList);
                     default:
-                        return "object";
+                        return typeof(object);
                 }
             }
 
-            return typeof(object).Name;
+            return typeof(object);
         }
 
         private Type ComputeType(SimpleType type)
@@ -305,8 +725,11 @@ namespace JSONSchema2POCO
 
         private class GenerationResult
         {
-            public List<CodeNamespaceImport> Imports { get; set; }
+            public HashSet<string> Imports { get; set; } = new HashSet<string>();
             public string TypeName { get; set; }
+            public Type Type { get; internal set; }
+
+            public ClassGeneratorFromJsonSchema ClassGenerator { get; set; }
         }
     }
 }

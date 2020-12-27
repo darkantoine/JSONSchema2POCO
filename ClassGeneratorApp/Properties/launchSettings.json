@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "ClassGeneratorApp": {
+      "commandName": "Project",
+      "commandLineArgs": "draft-04.json D:\\Workspace\\JSONSchema2POCO\\TestApp\\generated"
+    }
+  }
+}

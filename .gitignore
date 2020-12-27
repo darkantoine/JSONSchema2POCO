@@ -7,3 +7,6 @@ ClassGenerator/obj/
 ClassGenerator/bin/
 JSONSchema/obj/
 JSONSchema2POCO.Tests/bin/
+ClassGeneratorApp/bin/
+ClassGeneratorApp/obj/
+TestApp/

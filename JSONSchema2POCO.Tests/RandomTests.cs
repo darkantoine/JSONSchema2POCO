@@ -3,6 +3,7 @@ using JSONSchema2POCO;
 using System;
 using ClassGenerator;
 using System.Diagnostics;
+using System.Collections.Generic;
 
 namespace JSONSchema2POCO.Tests
 {
@@ -16,10 +17,7 @@ namespace JSONSchema2POCO.Tests
         [Test]
         public void Test1()
         {
-            A a = 2;
-            Console.WriteLine(a.I);
-            int i = a+1;
-            Console.WriteLine(i);
+            HashSet<Nullable<bool>> set = new HashSet<Nullable<bool>>() { true, null };
         }
     }
 }
