@@ -1,6 +1,7 @@
 ﻿{
     "id": "http://json-schema.org/draft-04/schema#",
     "$schema": "http://json-schema.org/draft-04/schema#",
+    "title": "JsonSchema",
     "description": "Core schema meta-schema",
     "definitions": {
         "schemaArray": {

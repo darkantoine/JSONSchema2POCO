@@ -15,7 +15,7 @@ namespace example
 {
     
     
-    public class TestClass : List<string>
+    public class GeneratedClass : List<string>
     {
     }
 }

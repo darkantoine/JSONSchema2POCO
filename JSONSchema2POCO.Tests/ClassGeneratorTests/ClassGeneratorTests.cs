@@ -21,6 +21,7 @@ namespace JSONSchema2POCO.Tests
         [TestCase("stringArray")]
         [TestCase("allOfProperties")]
         [TestCase("allOfTypeString")]
+        [TestCase("stringEnum")]
         [TestCase("draft-04")]
         public void Test(string testcase)
         {
@@ -33,12 +34,15 @@ namespace JSONSchema2POCO.Tests
         {
             var schemaJson = JsonDocument.Parse(File.ReadAllText(Path.GetFullPath(path + "input.json")));
             var schema = new JSONSchema(schemaJson);
-            var generator = new ClassGeneratorFromJsonSchema(schema, "TestClass");
+            var generator = new ClassGeneratorFromJsonSchema(schema);
             generator.GenerateAll();
             var results = generator.PrintAll();
 
             var expected = File.ReadAllText(Path.GetFullPath(path + "expected.txt"));
-            Console.WriteLine(results.Values.First());
+            foreach (string value in results.Values)
+            {
+                Console.WriteLine(value);
+            }
             results.Values.Aggregate("", (current, next) => current+next).ShouldBe(expected);
         }
     }

@@ -85,6 +85,12 @@
     <None Update="ClassGeneratorTests\stringArray\input.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Update="ClassGeneratorTests\stringEnum\expected.txt">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="ClassGeneratorTests\stringEnum\input.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Update="ClassGeneratorTests\stringType.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>

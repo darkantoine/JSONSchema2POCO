@@ -13,7 +13,7 @@ namespace example
 {
     
     
-    public class TestClass
+    public class JsonSchema
     {
         
         public string Id;
@@ -80,7 +80,7 @@ namespace example
         
         public SchemaArray OneOf;
         
-        public TestClass Not;
+        public JsonSchema Not;
     }
 }
 
@@ -102,7 +102,7 @@ namespace example
 {
     
     
-    public class SchemaArray : List<TestClass>
+    public class SchemaArray : List<JsonSchema>
     {
         
         // Hiding visiblity of default constructor as a minimum of 1 elements is required
@@ -110,7 +110,7 @@ namespace example
         {
         }
         
-        public SchemaArray(IEnumerable<TestClass> collection)
+        public SchemaArray(IEnumerable<JsonSchema> collection)
         {
             if (collection.Count() < 1)
             {
@@ -334,8 +334,8 @@ namespace example
         
 		public static implicit operator Boolean(AdditionalItems d) => (Boolean)d.Value;
 		public static explicit operator AdditionalItems(Boolean v) => new AdditionalItems(v);
-		public static implicit operator TestClass(AdditionalItems d) => (TestClass)d.Value;
-		public static explicit operator AdditionalItems(TestClass v) => new AdditionalItems(v);
+		public static implicit operator JsonSchema(AdditionalItems d) => (JsonSchema)d.Value;
+		public static explicit operator AdditionalItems(JsonSchema v) => new AdditionalItems(v);
         
         // Hiding visiblity of default constructor
         private AdditionalItems()
@@ -348,7 +348,7 @@ namespace example
             {
                 Value = value;
             }
-            if (value is TestClass)
+            if (value is JsonSchema)
             {
                 Value = value;
             }
@@ -377,8 +377,8 @@ namespace example
         
         private object Value;
         
-		public static implicit operator TestClass(Items d) => (TestClass)d.Value;
-		public static explicit operator Items(TestClass v) => new Items(v);
+		public static implicit operator JsonSchema(Items d) => (JsonSchema)d.Value;
+		public static explicit operator Items(JsonSchema v) => new Items(v);
 		public static implicit operator SchemaArray(Items d) => (SchemaArray)d.Value;
 		public static explicit operator Items(SchemaArray v) => new Items(v);
         
@@ -389,7 +389,7 @@ namespace example
         
         public Items(object value)
         {
-            if (value is TestClass)
+            if (value is JsonSchema)
             {
                 Value = value;
             }
@@ -424,8 +424,8 @@ namespace example
         
 		public static implicit operator Boolean(AdditionalProperties d) => (Boolean)d.Value;
 		public static explicit operator AdditionalProperties(Boolean v) => new AdditionalProperties(v);
-		public static implicit operator TestClass(AdditionalProperties d) => (TestClass)d.Value;
-		public static explicit operator AdditionalProperties(TestClass v) => new AdditionalProperties(v);
+		public static implicit operator JsonSchema(AdditionalProperties d) => (JsonSchema)d.Value;
+		public static explicit operator AdditionalProperties(JsonSchema v) => new AdditionalProperties(v);
         
         // Hiding visiblity of default constructor
         private AdditionalProperties()
@@ -438,7 +438,7 @@ namespace example
             {
                 Value = value;
             }
-            if (value is TestClass)
+            if (value is JsonSchema)
             {
                 Value = value;
             }
@@ -464,7 +464,7 @@ namespace example
 {
     
     
-    public class Definitions : Dictionary<string, TestClass>
+    public class Definitions : Dictionary<string, JsonSchema>
     {
     }
 }
@@ -486,7 +486,7 @@ namespace example
 {
     
     
-    public class Properties : Dictionary<string, TestClass>
+    public class Properties : Dictionary<string, JsonSchema>
     {
     }
 }
@@ -508,7 +508,7 @@ namespace example
 {
     
     
-    public class PatternProperties : Dictionary<string, TestClass>
+    public class PatternProperties : Dictionary<string, JsonSchema>
     {
     }
 }
@@ -555,8 +555,8 @@ namespace example
         
         private object Value;
         
-		public static implicit operator TestClass(DependenciesAdditionalProperties d) => (TestClass)d.Value;
-		public static explicit operator DependenciesAdditionalProperties(TestClass v) => new DependenciesAdditionalProperties(v);
+		public static implicit operator JsonSchema(DependenciesAdditionalProperties d) => (JsonSchema)d.Value;
+		public static explicit operator DependenciesAdditionalProperties(JsonSchema v) => new DependenciesAdditionalProperties(v);
 		public static implicit operator StringArray(DependenciesAdditionalProperties d) => (StringArray)d.Value;
 		public static explicit operator DependenciesAdditionalProperties(StringArray v) => new DependenciesAdditionalProperties(v);
         
@@ -567,7 +567,7 @@ namespace example
         
         public DependenciesAdditionalProperties(object value)
         {
-            if (value is TestClass)
+            if (value is JsonSchema)
             {
                 Value = value;
             }
@@ -679,7 +679,7 @@ namespace example
 {
     
     
-    public class TypeAnyOf1 : List<object>
+    public class TypeAnyOf1 : List<SimpleTypes>
     {
         
         // Hiding visiblity of default constructor as a minimum of 1 elements is required
@@ -687,7 +687,7 @@ namespace example
         {
         }
         
-        public TypeAnyOf1(IEnumerable<Object> collection)
+        public TypeAnyOf1(IEnumerable<SimpleTypes> collection)
         {
             if (collection.Count() < 1)
             {

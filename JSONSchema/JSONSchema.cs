@@ -7,6 +7,7 @@ using System.Text;
 using System.Reflection;
 using System.Linq;
 using static JSONSchema2POCO.Utils;
+using System.Diagnostics;
 
 namespace JSONSchema2POCO
 {
@@ -405,7 +406,7 @@ namespace JSONSchema2POCO
                 }
                 else
                 {
-                    throw new ArgumentException($"Invalid JSON Schema. {current.Name} is not a supported JsonSchema property");
+                    Console.WriteLine($"Invalid JSON Schema. {current.Name} is not a supported JsonSchema property");
                 }
             }
 
@@ -418,13 +419,23 @@ namespace JSONSchema2POCO
 
         private static void ReplaceRefs(JSONSchema schema, JSONSchema root)
         {
+
             ReplaceRefsInDictionary(schema.Properties, root);
             ReplaceRefsInDictionary(schema.Definitions, root);
             ReplaceRefsInDictionary(schema.PatternProperties, root);
 
-            ReplaceRefsInAnyOf(schema.AdditionalProperties, root);
-            ReplaceRefsInAnyOf(schema.AdditionalItems, root);
-            ReplaceRefsInAnyOf(schema.Items, root);
+            if (schema.AdditionalProperties != null)
+            {
+                ReplaceRefsInAnyOf<bool, JSONSchema>(schema.AdditionalProperties, root);
+            }
+            if (schema.AdditionalItems != null)
+            {
+                ReplaceRefsInAnyOf<bool, JSONSchema>(schema.AdditionalItems, root);
+            }
+            if (schema.Items != null)
+            {
+                ReplaceRefsInAnyOf<JSONSchema, SchemaArray>(schema.Items, root);
+            }
 
             ReplaceRefsInSchemaArray(schema.AnyOf, root);
             ReplaceRefsInSchemaArray(schema.AllOf, root);
@@ -473,6 +484,10 @@ namespace JSONSchema2POCO
                     if (array[i]?.Ref != null)
                     {
                         array[i] = convertRefToSchema(array[i].Ref, root);
+                    }
+                    else
+                    {
+                        ReplaceRefs(array[i], root);
                     }
                 }
             }

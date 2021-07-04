@@ -125,6 +125,13 @@ namespace JSONSchema2POCO
                     var mergedClassGenerator = new ClassGeneratorFromJsonSchema(mergedSchema,this.targetClass.Name);
                     targetClass = mergedClassGenerator.GenerateClass();
                     context[schema] = mergedClassGenerator.context[mergedSchema];
+                    foreach (var jsonSchema in mergedClassGenerator.context.Keys)
+                    {
+                        if (jsonSchema != mergedSchema)
+                        {
+                            context[jsonSchema] = mergedClassGenerator.context[jsonSchema];
+                        }
+                    }
                     return targetClass;
 
                 }
@@ -151,6 +158,7 @@ namespace JSONSchema2POCO
                     else if (property.Type?.GetUnderlyingType() == typeof(SimpleType)
                         && (property.Type.Value as SimpleType).Value != SimpleType.Object
                         && (property.Type.Value as SimpleType).Value != SimpleType.Array
+                        && (property.Enum == null || property.Enum.Count < 1)
                         )
                     {
                         targetClass.AddProperty(cleanPropertyName, ComputeType((SimpleType)property.Type.GetValue()));

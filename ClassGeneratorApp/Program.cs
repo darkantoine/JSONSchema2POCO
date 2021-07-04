@@ -47,7 +47,7 @@ namespace ClassGeneratorApp
             
             var schema = new JSONSchema(inputSchema);
 
-            var generator = new ClassGeneratorFromJsonSchema(schema, "Jsonschema");
+            var generator = new ClassGeneratorFromJsonSchema(schema, schema.Title ?? "GeneratedClass");
             generator.GenerateAll();
             var results = generator.PrintAll();
 
